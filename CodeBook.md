@@ -16,9 +16,9 @@ The script `run_analysis.R`
   
 # run_analysis.R
 
-The script is parititioned into functions such that each function performs one of the
-steps described above. To run whole cleaning procedure, call `clean.data`
-function. The script also assumes that `plyr` library is already installed.
+The script is parititioned into different parts such that each part performs one of the
+steps described above. To run whole project you only have to execute the function 
+placed in run_analysis.R (run_analysis())
 
 # The original data set
 

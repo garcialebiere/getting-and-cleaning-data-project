@@ -1,106 +1,83 @@
-# This R script gets and performs some cleaning on human activity data, built
-# from recordings of subjects performing daily activities while carrying
-# smartphone. The full description of the data set is available at:
-# http://archive.ics.uci.edu/ml/datasets/Human+Activity+Recognition+Using+Smartphones
-
-library(plyr)
-
-download.data = function() {
-        "Checks for data directory and creates one if it doesn't exist"
+run_analysis <- function() {
+        
+        ## Part0 - Download and unzip
         if (!file.exists("data")) {
-                message("Creating data directory")
                 dir.create("data")
         }
         if (!file.exists("data/UCI HAR Dataset")) {
                 # download the data
                 fileURL <- "https://d396qusza40orc.cloudfront.net/getdata%2Fprojectfiles%2FUCI%20HAR%20Dataset.zip"
                 zipfile="data/UCI_HAR_data.zip"
-                message("Downloading data")
                 download.file(fileURL, destfile=zipfile)
                 unzip(zipfile, exdir="data")
         }
-}
-
-merge.datasets = function() {
-        "Merge training and test datasets"
-        # Read data
-        message("reading X_train.txt")
-        training.x <- read.table("data/UCI HAR Dataset/train/X_train.txt")
-        message("reading y_train.txt")
-        training.y <- read.table("data/UCI HAR Dataset/train/y_train.txt")
-        message("reading subject_train.txt")
-        training.subject <- read.table("data/UCI HAR Dataset/train/subject_train.txt")
-        message("reading X_test.txt")
-        test.x <- read.table("data/UCI HAR Dataset/test/X_test.txt")
-        message("reading y_test.txt")
-        test.y <- read.table("data/UCI HAR Dataset/test/y_test.txt")
-        message("reading subject_test.txt")
-        test.subject <- read.table("data/UCI HAR Dataset/test/subject_test.txt")
-        # Merge
-        merged.x <- rbind(training.x, test.x)
-        merged.y <- rbind(training.y, test.y)
-        merged.subject <- rbind(training.subject, test.subject)
-        # merge train and test datasets and return
-        list(x=merged.x, y=merged.y, subject=merged.subject)
-}
-
-extract.mean.and.std = function(df) {
-        # Given the dataset (x values), extract only the measurements on the mean
-        # and standard deviation for each measurement.
         
-        # Read the feature list file
-        features <- read.table("data/UCI HAR Dataset/features.txt")
-        # Find the mean and std columns
-        mean.col <- sapply(features[,2], function(x) grepl("mean()", x, fixed=T))
-        std.col <- sapply(features[,2], function(x) grepl("std()", x, fixed=T))
-        # Extract them from the data
-        edf <- df[, (mean.col | std.col)]
-        colnames(edf) <- features[(mean.col | std.col), 2]
-        edf
-}
+        ## Part1 - Read data
+        Activities <- read.table("data/UCI HAR Dataset/activity_labels.txt", colClasses = "character",nrow = 7)
+        Features <- read.table("data/UCI HAR Dataset/features.txt", colClasses = "character", nrow = 561)
+        
+        ## Read train data
+        subject_train <- read.table("data/UCI HAR Dataset/train/subject_train.txt", nrow = 7352)
+        X_train <- read.table("data/UCI HAR Dataset/train/X_train.txt", colClasses = "numeric",nrow = 7352)
+        names(X_train) <- Features[,2]
+        Training_labels <- read.table("data/UCI HAR Dataset/train/y_train.txt", nrow = 7352)
+        names(Training_labels ) <- "TrainLabel"
+        names(subject_train) <- "TrainSubject"
+        train_data <- data.frame(subject_train, Training_labels, X_train)
+        
+        ## Read test data
+        subject_test <- read.table("data/UCI HAR Dataset/test/subject_test.txt", nrow = 2974)
+        X_test  <- read.table("data/UCI HAR Dataset/test/X_test.txt", nrow = 2974)
+        names(X_test) <- Features[,2]
+        Test_labels <- read.table("data/UCI HAR Dataset/test/y_test.txt", nrow = 2974)
+        names(Test_labels ) <- "TestLabel"
+        names(subject_test) <- "TestSubject"
+        test_data <- data.frame(subject_test, Test_labels,X_test)
+        merge_data <- merge(train_data, test_data,all = TRUE)
 
-name.activities = function(df) {
-        # Use descriptive activity names to name the activities in the dataset
-        colnames(df) <- "activity"
-        df$activity[df$activity == 1] = "WALKING"
-        df$activity[df$activity == 2] = "WALKING_UPSTAIRS"
-        df$activity[df$activity == 3] = "WALKING_DOWNSTAIRS"
-        df$activity[df$activity == 4] = "SITTING"
-        df$activity[df$activity == 5] = "STANDING"
-        df$activity[df$activity == 6] = "LAYING"
-        df
-}
+        
+        ## Part2 - Merging data
+        index <- c(grep(".mean.", names(merge_data)),grep(".std.", names(merge_data)))
+        mean_std_data <- merge_data[,index]
 
-bind.data <- function(x, y, subjects) {
-        # Combine mean-std values (x), activities (y) and subjects into one data
-        # frame.
-        cbind(x, y, subjects)
-}
-
-create.tidy.dataset = function(df) {
-        # Given X values, y values and subjects, create an independent tidy dataset
-        # with the average of each variable for each activity and each subject.
-        tidy <- ddply(df, .(subject, activity), function(x) colMeans(x[,1:60]))
-        tidy
-}
-
-clean.data = function() {
-        # Download data
-        download.data()
-        # merge training and test datasets. merge.datasets function returns a list
-        # of three dataframes: X, y, and subject
-        merged <- merge.datasets()
-        # Extract only the measurements of the mean and standard deviation for each
-        # measurement
-        cx <- extract.mean.and.std(merged$x)
-        # Name activities
-        cy <- name.activities(merged$y)
-        # Use descriptive column name for subjects
-        colnames(merged$subject) <- c("subject")
-        # Combine data frames into one
-        combined <- bind.data(cx, cy, merged$subject)
-        # Create tidy dataset
-        tidy <- create.tidy.dataset(combined)
-        # Write tidy dataset as csv
-        write.csv(tidy, "UCI_HAR_tidy.csv", row.names=FALSE)
+        
+        ## Part3 & Part4
+        Labels <-  merge_data$TrainLabel
+        Labels[is.na(Labels)] <- merge_data$TestLabel[is.na(Labels)]
+        Subject <- merge_data$TrainSubject
+        Subject[is.na(Subject)] <- merge_data$TestSubject[is.na(Subject)]
+        LabelName <- as.character(dim(Labels))
+        for (i in 1:dim(Activities)[1])
+                LabelName[Labels == i] = Activities[i,2]
+        
+        mean_std_data <- data.frame(Subject,Activities = LabelName,ActivitiesLabel = Labels,mean_std_data)        
+        
+        ##Part5
+        Average <- data.frame()
+        
+        for (i in 1: max(Subject))
+        {
+                temp <- mean_std_data[which(mean_std_data$Subject == i),]
+                for (j in 1:max(Labels))
+                {
+                        temp2 <- temp[which(temp$ActivitiesLabel == j),]
+                        temp2 <- apply(temp2[,4:82],2,mean)
+                        temp2 <- c("Subject" = i,"ActivitiesLabel" = j, temp2)
+                        if (i == 1 & j == 1)
+                        {
+                                Average <- as.data.frame(temp2)
+                        }else
+                                Average = data.frame(Average,temp2)
+                }
+        }
+        
+        Average = t(Average)
+        row.names(Average) <- c()
+        
+        ## Output result
+        write.table(Average, file = "Average.txt", sep = "\t", row.names = FALSE, col.names = TRUE)
+        write.table(Average, file = "Average.csv", sep = ",", row.names = FALSE, col.names = TRUE)
+        View(Average)
+        Average
+        
 }
